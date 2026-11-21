@@ -5,7 +5,10 @@
 // 실행: node collect.mjs  →  viewer/data/YYYY-MM-DD.js 생성 + viewer/data/manifest.js 갱신
 // GitHub Actions(.github/workflows/collect.yml)가 하루 3번 자동 실행합니다.
 
-import { Innertube } from 'youtubei.js';
+import { Innertube, Log } from 'youtubei.js';
+
+// 유튜브 화면 구조가 조금씩 바뀔 때마다 파서 경고가 수백 줄 찍혀서 로그가 안 보입니다. 끕니다.
+Log.setLevel(Log.Level.NONE);
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -35,15 +38,42 @@ function decodeEntities(s) {
 }
 
 function parseViews(text) {
-  // "조회수 1,234,567회" → 1234567
+  // "조회수 1,234,567회" → 1234567 / "조회수 2.6천만회" → 26000000 / "1.2억회" → 120000000
   if (!text) return 0;
-  const m = String(text).replace(/,/g, '').match(/([\d.]+)(만|천|억)?/);
+  const m = String(text).replace(/,/g, '').match(/([\d.]+)\s*([천만억]*)/);
   if (!m) return 0;
+  const unit = { '천': 1e3, '만': 1e4, '억': 1e8 };
   let n = parseFloat(m[1]);
-  if (m[2] === '천') n *= 1e3;
-  if (m[2] === '만') n *= 1e4;
-  if (m[2] === '억') n *= 1e8;
+  for (const ch of m[2]) n *= unit[ch] || 1;
   return Math.round(n);
+}
+
+// 유튜브 검색 결과는 옛 형식(Video)과 새 형식(LockupView)이 섞여서 옵니다. 둘 다 같은 모양으로 맞춥니다.
+function normalizeVideo(v) {
+  if (v?.type === 'LockupView') {
+    if (v.content_type !== 'VIDEO' && v.content_type !== 'SHORT') return null;
+    const parts = (v.metadata?.metadata?.metadata_rows || [])
+      .flatMap((r) => (r.metadata_parts || []).map((p) => p.text?.text || p.text?.toString?.() || ''))
+      .map((t) => t.trim())
+      .filter(Boolean);
+    const viewsText = parts.find((t) => /조회수|회$|views?$/i.test(t)) || '';
+    const published = parts.find((t) => t !== viewsText && /전$|ago$|스트리밍/.test(t)) || '';
+    const channel = parts.find((t) => t !== viewsText && t !== published) || '';
+    return {
+      id: v.content_id,
+      title: v.metadata?.title?.text ?? v.metadata?.title?.toString?.() ?? '',
+      channel, viewsText, published,
+      duration: v.duration?.text || '',
+    };
+  }
+  return {
+    id: v?.id,
+    title: v?.title?.text ?? String(v?.title ?? ''),
+    channel: v?.author?.name ?? '',
+    viewsText: v?.view_count?.text ?? v?.short_view_count?.text ?? '',
+    published: v?.published?.text ?? '',
+    duration: v?.duration?.text ?? '',
+  };
 }
 
 async function collectYouTube() {
@@ -52,26 +82,27 @@ async function collectYouTube() {
   for (const cat of CATEGORIES) {
     try {
       const res = await yt.search(cat.query, { upload_date: 'week', sort_by: 'view_count' });
-      for (const v of (res.videos || []).slice(0, 12)) {
-        if (!v.id || seen.has(v.id)) continue;
-        const title = v.title?.text ?? String(v.title ?? '');
-        const viewsText = v.view_count?.text ?? '';
-        if (!title) continue;
+      let added = 0;
+      for (const raw of (res.videos || [])) {
+        if (added >= 12) break;
+        const v = normalizeVideo(raw);
+        if (!v || !v.id || !v.title || seen.has(v.id)) continue;
         seen.set(v.id, {
           source: 'youtube',
           category: cat.name,
           id: v.id,
-          title,
-          channel: v.author?.name ?? '',
-          views: parseViews(viewsText),
-          viewsText,
-          published: v.published?.text ?? '',
-          duration: v.duration?.text ?? '',
+          title: v.title,
+          channel: v.channel,
+          views: parseViews(v.viewsText),
+          viewsText: v.viewsText,
+          published: v.published,
+          duration: v.duration,
           thumbnail: `https://i.ytimg.com/vi/${v.id}/mqdefault.jpg`,
           url: `https://www.youtube.com/watch?v=${v.id}`,
         });
+        added++;
       }
-      console.log(`[유튜브] ${cat.name}: 누적 ${seen.size}개`);
+      console.log(`[유튜브] ${cat.name}: +${added} (누적 ${seen.size}개)`);
     } catch (e) {
       console.error(`[유튜브] ${cat.name} 실패:`, e.message);
     }

@@ -1,6 +1,11 @@
-# 데일리 트렌드 자동 수집
-# 한국 시간 07:17 · 12:17 · 18:17 에 collect.mjs 를 돌리고,
-# 새 데이터(viewer/data/)를 저장소에 커밋합니다.
+# 데일리 트렌드 자동 수집 + 웹페이지 배포
+#
+# 1) collect : 한국 시간 07:17 · 12:17 · 18:17 에 collect.mjs 를 돌리고
+#              새 데이터(viewer/data/)를 저장소에 커밋합니다.
+# 2) deploy  : GitHub Pages 가 켜져 있으면(Settings → Pages → Source: GitHub Actions)
+#              최신 내용을 https://molezzang.github.io/trend-hub/ 에 올립니다.
+#              꺼져 있으면 실패 없이 조용히 건너뜁니다.
+#
 # Actions 탭 → "트렌드 수집" → Run workflow 로 지금 바로 돌릴 수도 있습니다.
 
 name: 트렌드 수집
@@ -9,22 +14,27 @@ on:
   schedule:
     - cron: "17 22,3,9 * * *"   # UTC 기준 (= 한국 07:17, 12:17, 18:17)
   workflow_dispatch:
+  push:
+    branches: [main]            # 코드를 고치면 수집 없이 배포만 다시
 
 permissions:
   contents: write
+  pages: write
+  id-token: write
 
 concurrency:
-  group: collect
+  group: trend-hub
   cancel-in-progress: false
 
 jobs:
   collect:
+    if: github.event_name != 'push'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: 22
           cache: npm
@@ -45,3 +55,42 @@ jobs:
           fi
           git commit -m "데이터 수집 $(TZ=Asia/Seoul date '+%Y-%m-%d %H:%M')"
           git push
+
+  deploy:
+    needs: collect
+    # 수집이 실패하거나 건너뛰어져도(=코드 push) 지금 있는 내용으로 배포
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment:
+      name: github-pages
+    steps:
+      - name: Pages 켜져 있는지 확인
+        id: check
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          body=$(curl -s -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${{ github.repository }}/pages")
+          if echo "$body" | grep -q '"build_type": *"workflow"'; then
+            echo "on=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "on=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::GitHub Pages가 꺼져 있어 배포를 건너뜁니다. Settings → Pages → Source 를 'GitHub Actions' 로 바꾸면 다음 실행부터 배포됩니다."
+          fi
+
+      - uses: actions/checkout@v5
+        if: steps.check.outputs.on == 'true'
+        with:
+          ref: main               # 방금 수집 커밋까지 포함
+
+      - uses: actions/configure-pages@v5
+        if: steps.check.outputs.on == 'true'
+
+      - uses: actions/upload-pages-artifact@v3
+        if: steps.check.outputs.on == 'true'
+        with:
+          path: .
+
+      - uses: actions/deploy-pages@v4
+        if: steps.check.outputs.on == 'true'
