@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>트렌드 허브</title>
+<meta name="robots" content="noindex, nofollow">
+<meta name="theme-color" content="#0f1115">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="트렌드 허브">
+<meta name="mobile-web-app-capable" content="yes">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🔥</text></svg>">
+<style>
+  :root {
+    --bg: #0f1115; --panel: #181b22; --line: #2a2f3a;
+    --text: #e8eaf0; --sub: #8b93a5; --accent: #ff5c5c; --blue: #6b8cff;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: var(--bg); color: var(--text); min-height: 100vh;
+    font-family: "Pretendard", "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
+    padding: max(28px, env(safe-area-inset-top)) 18px 40px;
+  }
+  .wrap { max-width: 520px; margin: 0 auto; }
+  h1 { font-size: 24px; font-weight: 800; margin-bottom: 6px; }
+  .sub { color: var(--sub); font-size: 14px; margin-bottom: 26px; line-height: 1.6; }
+  a.tool {
+    display: block; text-decoration: none; color: inherit;
+    background: var(--panel); border: 1px solid var(--line); border-radius: 18px;
+    padding: 20px; margin-bottom: 12px; transition: border-color .15s, transform .1s;
+  }
+  a.tool:active { transform: scale(.985); }
+  a.tool:hover { border-color: #3d4452; }
+  .tool .top { display: flex; align-items: center; gap: 12px; margin-bottom: 8px; }
+  .tool .ico {
+    width: 46px; height: 46px; border-radius: 13px; flex: 0 0 auto;
+    display: flex; align-items: center; justify-content: center; font-size: 24px;
+  }
+  .tool.hunter .ico { background: rgba(255,92,92,.14); }
+  .tool.viewer .ico { background: rgba(107,140,255,.14); }
+  .tool .name { font-size: 18px; font-weight: 800; }
+  .tool .go { margin-left: auto; color: var(--sub); font-size: 20px; }
+  .tool .desc { color: #c4cad6; font-size: 14px; line-height: 1.6; }
+  .tool .foot { margin-top: 10px; font-size: 12px; color: var(--sub); }
+  .tool.hunter .foot b { color: var(--accent); }
+  .tool.viewer .foot b { color: var(--blue); }
+  .howto {
+    margin-top: 26px; border-top: 1px solid var(--line); padding-top: 20px;
+    font-size: 13px; color: var(--sub); line-height: 1.8;
+  }
+  .howto h2 { font-size: 14px; color: var(--text); margin-bottom: 6px; }
+  .howto b { color: var(--text); font-weight: 600; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>🔥 트렌드 허브</h1>
+  <p class="sub">지금 뜨는 걸 보고, 누르면 바로 𝕏 글감이 복사됩니다.<br>Claude에 붙여넣기만 하세요.</p>
+
+  <a class="tool hunter" href="hunter/">
+    <div class="top">
+      <div class="ico">🫀</div>
+      <div class="name">튼튼혈관 트렌드 헌터</div>
+      <div class="go">›</div>
+    </div>
+    <div class="desc">지금 떡상 중인 건강 영상을 카테고리별로. 하루 조회수 기준으로 줄 세워 줍니다.</div>
+    <div class="foot"><b>유튜브 API 키</b> · 기기마다 처음 한 번만 넣으면 됩니다</div>
+  </a>
+
+  <a class="tool viewer" href="viewer/">
+    <div class="top">
+      <div class="ico">📊</div>
+      <div class="name">데일리 트렌드 뷰어</div>
+      <div class="go">›</div>
+    </div>
+    <div class="desc">실시간 검색어 · 구글 트렌드 · 유튜브 인기 영상을 한 화면에.</div>
+    <div class="foot"><b>하루 3번 자동 수집</b> · <span id="last">불러오는 중…</span></div>
+  </a>
+
+  <div class="howto">
+    <h2>📱 폰 홈 화면에 붙여두기</h2>
+    <b>아이폰</b> — 사파리 아래 공유 버튼 → <b>홈 화면에 추가</b><br>
+    <b>안드로이드</b> — 크롬 오른쪽 위 ⋮ → <b>홈 화면에 추가</b><br>
+    그다음부터는 앱처럼 눌러서 바로 엽니다.
+  </div>
+</div>
+
+<script src="viewer/data/manifest.js"></script>
+<script>
+  (function () {
+    var d = (window.__TREND_DATES__ || []).slice().sort();
+    document.getElementById('last').textContent = d.length ? '최근 수집 ' + d[d.length - 1] : '첫 수집 대기 중';
+  })();
+</script>
+</body>
+</html>

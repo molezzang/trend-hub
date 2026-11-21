@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>데일리 트렌드 뷰어</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: 'Pretendard', -apple-system, 'Malgun Gothic', sans-serif;
+    background: #f4f5f7; color: #1c1e21; padding-bottom: 60px;
+  }
+  header {
+    position: sticky; top: 0; z-index: 10;
+    background: rgba(255,255,255,.92); backdrop-filter: blur(8px);
+    border-bottom: 1px solid #e4e6eb; padding: 14px 20px;
+  }
+  .header-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; max-width: 1200px; margin: 0 auto; }
+  h1 { font-size: 19px; font-weight: 800; }
+  h1 .accent { color: #4f6ef7; }
+  .date-label { font-size: 13px; color: #65676b; }
+  .spacer { flex: 1; }
+  select#dateSel {
+    padding: 7px 12px; border: 1px solid #d8dade; border-radius: 8px;
+    font-size: 13px; background: #fff; cursor: pointer;
+  }
+  .search-wrap { max-width: 1200px; margin: 12px auto 0; }
+  #search {
+    width: 100%; padding: 11px 16px; border: 1px solid #d8dade; border-radius: 12px;
+    font-size: 14px; background: #fff; outline: none;
+  }
+  #search:focus { border-color: #4f6ef7; box-shadow: 0 0 0 3px rgba(79,110,247,.12); }
+  .chips { max-width: 1200px; margin: 12px auto 0; display: flex; gap: 8px; flex-wrap: wrap; }
+  .chip {
+    padding: 7px 14px; border-radius: 20px; border: 1px solid #d8dade;
+    background: #fff; font-size: 13px; cursor: pointer; user-select: none;
+    display: inline-flex; align-items: center; gap: 6px; font-weight: 500;
+  }
+  .chip.active { background: #1c1e21; color: #fff; border-color: #1c1e21; }
+  .chip .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+  main { max-width: 1200px; margin: 18px auto 0; padding: 0 20px; }
+  .count { font-size: 13px; color: #65676b; margin-bottom: 12px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 16px; }
+  .card {
+    background: #fff; border-radius: 14px; overflow: hidden;
+    box-shadow: 0 1px 3px rgba(0,0,0,.07); transition: transform .12s, box-shadow .12s;
+    display: flex; flex-direction: column; color: inherit;
+  }
+  .card a { color: inherit; text-decoration: none; }
+  .card .open { display: block; }
+  .card:hover { transform: translateY(-3px); box-shadow: 0 6px 18px rgba(0,0,0,.12); }
+  .thumb-wrap { position: relative; aspect-ratio: 16/9; background: #e4e6eb; }
+  .thumb-wrap img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .thumb-wrap .kw-bg {
+    width: 100%; height: 100%; display: flex; align-items: center; justify-content: center;
+    font-size: 22px; font-weight: 800; color: #fff; padding: 16px; text-align: center; word-break: keep-all;
+  }
+  .rank-badge {
+    position: absolute; top: 8px; left: 8px; background: rgba(0,0,0,.75); color: #fff;
+    font-size: 12px; font-weight: 700; padding: 4px 9px; border-radius: 7px;
+  }
+  .src-badge {
+    position: absolute; top: 8px; right: 8px; color: #fff;
+    font-size: 11px; font-weight: 700; padding: 4px 8px; border-radius: 7px;
+  }
+  .duration {
+    position: absolute; bottom: 8px; right: 8px; background: rgba(0,0,0,.75); color: #fff;
+    font-size: 11px; padding: 2px 6px; border-radius: 5px;
+  }
+  .body { padding: 12px 14px 14px; display: flex; flex-direction: column; gap: 7px; flex: 1; }
+  .title { font-size: 14px; font-weight: 700; line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .meta { font-size: 12px; color: #65676b; display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  .meta .views { color: #4f6ef7; font-weight: 700; }
+  .tag { align-self: flex-start; font-size: 11px; background: #f0f2f5; color: #65676b; padding: 3px 9px; border-radius: 6px; }
+  .actions { margin-top: auto; display: flex; gap: 6px; padding-top: 4px; }
+  .xbtn {
+    flex: 1; border: 0; border-radius: 9px; padding: 10px 8px; cursor: pointer;
+    background: #0f1419; color: #fff; font-size: 13px; font-weight: 700; font-family: inherit;
+  }
+  .xbtn:active { transform: scale(.98); }
+  .xbtn.done { background: #00b894; }
+  .gobtn {
+    flex: 0 0 auto; border: 1px solid #d8dade; border-radius: 9px; padding: 9px 12px;
+    background: #fff; color: #1c1e21; font-size: 13px; font-weight: 600; text-decoration: none;
+    display: inline-flex; align-items: center;
+  }
+  .toast {
+    position: fixed; left: 50%; bottom: 24px; transform: translate(-50%, 16px);
+    background: #0f1419; color: #fff; font-size: 14px; font-weight: 700;
+    padding: 12px 20px; border-radius: 999px; opacity: 0; pointer-events: none;
+    transition: .2s; z-index: 50; max-width: 90vw; text-align: center;
+  }
+  .toast.show { opacity: 1; transform: translate(-50%, 0); }
+  .back { font-size: 13px; color: #4f6ef7; text-decoration: none; font-weight: 600; }
+  @media (max-width: 560px) {
+    header { padding: 12px 14px; }
+    main { padding: 0 14px; }
+    h1 { font-size: 17px; }
+    .grid { grid-template-columns: 1fr; gap: 12px; }
+    .chips { flex-wrap: nowrap; overflow-x: auto; padding-bottom: 2px; }
+    .chip { flex: 0 0 auto; }
+  }
+  .empty { text-align: center; color: #65676b; padding: 60px 0; font-size: 14px; }
+  footer { max-width: 1200px; margin: 30px auto 0; padding: 0 20px; font-size: 12px; color: #8a8d91; }
+</style>
+</head>
+<body>
+<header>
+  <div class="header-row">
+    <a class="back" href="../">← 홈</a>
+    <h1>📊 데일리 <span class="accent">트렌드</span> 뷰어</h1>
+    <span class="date-label" id="dateLabel"></span>
+    <div class="spacer"></div>
+    <select id="dateSel"></select>
+  </div>
+  <div class="search-wrap">
+    <input id="search" type="text" placeholder="🔍 키워드로 검색 — 예: 예능, 드라마, 야구, K-POP…">
+  </div>
+  <div class="chips" id="chips"></div>
+</header>
+
+<main>
+  <div class="count" id="count"></div>
+  <div class="grid" id="grid"></div>
+  <div class="empty" id="empty" style="display:none">표시할 항목이 없어요. 필터나 검색어를 바꿔보세요.</div>
+</main>
+
+<footer>
+  소스: 유튜브(카테고리별 주간 조회수 상위) · 구글 트렌드 급상승 검색어(KR) · 시그널 실시간 검색어 —
+  하루 3번 자동 수집 (GitHub Actions) · 계정/API키 불필요
+</footer>
+
+<div class="toast" id="toast"></div>
+<script src="data/manifest.js"></script>
+<script>
+const SOURCES = {
+  youtube: { label: '유튜브', color: '#f00', dot: '#f00' },
+  gtrends: { label: '구글 트렌드', color: '#4f6ef7', dot: '#4f6ef7' },
+  signal:  { label: '실시간 검색어', color: '#00b894', dot: '#00b894' },
+};
+const KW_COLORS = ['#4f6ef7', '#e17055', '#00b894', '#6c5ce7', '#e84393', '#0984e3', '#d63031', '#fdcb6e'];
+
+let currentDate = null;
+let filterSrc = 'all';
+let query = '';
+
+const dates = (window.__TREND_DATES__ || []).slice().sort().reverse();
+const dateSel = document.getElementById('dateSel');
+dates.forEach(d => {
+  const opt = document.createElement('option');
+  opt.value = d; opt.textContent = d;
+  dateSel.appendChild(opt);
+});
+
+function loadDate(d) {
+  currentDate = d;
+  window.__TREND_DATA__ = window.__TREND_DATA__ || {};
+  if (window.__TREND_DATA__[d]) { render(); return; }
+  const s = document.createElement('script');
+  s.src = 'data/' + d + '.js';
+  s.onload = render;
+  s.onerror = () => { document.getElementById('count').textContent = d + ' 데이터를 불러오지 못했어요.'; };
+  document.body.appendChild(s);
+}
+
+function fmtViews(n) {
+  if (!n) return '';
+  if (n >= 1e8) return (n / 1e8).toFixed(1) + '억';
+  if (n >= 1e4) return (n / 1e4).toFixed(1) + '만';
+  return n.toLocaleString();
+}
+
+function dayLabel(d) {
+  const dt = new Date(d + 'T00:00:00Z');   // 날짜 문자열 그대로 읽기 (기기 시간대 영향 없음)
+  const days = ['일', '월', '화', '수', '목', '금', '토'];
+  return `${dt.getUTCMonth() + 1}월 ${dt.getUTCDate()}일 (${days[dt.getUTCDay()]}) 기준`;
+}
+
+function buildChips() {
+  const wrap = document.getElementById('chips');
+  wrap.innerHTML = '';
+  const all = document.createElement('span');
+  all.className = 'chip' + (filterSrc === 'all' ? ' active' : '');
+  all.textContent = '✨ 전체';
+  all.onclick = () => { filterSrc = 'all'; buildChips(); render(); };
+  wrap.appendChild(all);
+  for (const [key, s] of Object.entries(SOURCES)) {
+    const c = document.createElement('span');
+    c.className = 'chip' + (filterSrc === key ? ' active' : '');
+    c.innerHTML = `<span class="dot" style="background:${s.dot}"></span>${s.label}`;
+    c.onclick = () => { filterSrc = key; buildChips(); render(); };
+    wrap.appendChild(c);
+  }
+}
+
+let CARDS = [];   // 화면에 그려진 카드 원본 (X 글감 만들 때 씀)
+
+function cardYouTube(v, i) {
+  return `<div class="card">
+    <a class="open" href="${v.url}" target="_blank" rel="noopener">
+      <div class="thumb-wrap">
+        <img src="${v.thumbnail}" loading="lazy" alt="">
+        <span class="rank-badge">${v.rank}위</span>
+        <span class="src-badge" style="background:#f00">유튜브</span>
+        ${v.duration ? `<span class="duration">${v.duration}</span>` : ''}
+      </div>
+    </a>
+    <div class="body">
+      <a class="title" href="${v.url}" target="_blank" rel="noopener">${esc(v.title)}</a>
+      <div class="meta"><span class="views">조회수 ${fmtViews(v.views)}</span><span>${esc(v.channel)}</span><span>${esc(v.published)}</span></div>
+      <span class="tag">${esc(v.category)}</span>
+      <div class="actions">
+        <button class="xbtn" data-i="${i}">𝕏 글감 복사</button>
+        <a class="gobtn" href="${v.url}" target="_blank" rel="noopener">▶ 영상</a>
+      </div>
+    </div>
+  </div>`;
+}
+
+function cardKeyword(k, srcKey, i) {
+  const s = SOURCES[srcKey];
+  const color = KW_COLORS[(k.rank - 1) % KW_COLORS.length];
+  const img = k.picture ? `<img src="${k.picture}" loading="lazy" alt="">`
+    : `<div class="kw-bg" style="background:linear-gradient(135deg, ${color}, ${color}cc)">${esc(k.keyword)}</div>`;
+  const news = k.newsTitle ? `<div class="meta">${esc(k.newsSource ? k.newsSource + ' · ' : '')}${esc(k.newsTitle)}</div>` : '';
+  const goUrl = k.newsUrl || k.url;
+  return `<div class="card">
+    <a class="open" href="${k.url}" target="_blank" rel="noopener">
+      <div class="thumb-wrap">
+        ${img}
+        <span class="rank-badge">${k.rank}위</span>
+        <span class="src-badge" style="background:${s.color}">${s.label}</span>
+      </div>
+    </a>
+    <div class="body">
+      <a class="title" href="${k.url}" target="_blank" rel="noopener">${esc(k.keyword)}</a>
+      ${k.traffic ? `<div class="meta"><span class="views">검색량 ${esc(k.traffic)}</span></div>` : ''}
+      ${news}
+      <span class="tag">${s.label}</span>
+      <div class="actions">
+        <button class="xbtn" data-i="${i}">𝕏 글감 복사</button>
+        <a class="gobtn" href="${goUrl}" target="_blank" rel="noopener">${k.newsUrl ? '📰 기사' : '🔎 검색'}</a>
+      </div>
+    </div>
+  </div>`;
+}
+
+/* ══════ 𝕏 글감 프롬프트 ══════ */
+function xPrompt(it) {
+  const d = it.d;
+  const common = `
+이걸 튼튼혈관연구소 X(트위터) 글로 써줘.
+- 17년차 심혈관조영실 방사선사 시점
+- 이 이슈와 혈관·심장 건강을 잇는 연결고리 하나를 잡아서
+- 첫 줄에 결론부터, 짧게 끊어 쓰는 X 말투로
+- 연결고리가 억지스러우면 쓰기 전에 "연결 약함"이라고 먼저 말해줘
+- 후보 3개`;
+  if (it.t === 'yt') {
+    return `지금 유튜브에서 "${d.title}" (${d.channel}, 조회수 ${fmtViews(d.views)}, ${d.published}) 영상이 뜨고 있어. [${d.category}]
+${common}
+
+원본: ${d.url}`;
+  }
+  const where = it.src === 'signal' ? '실시간 검색어' : '구글 트렌드 급상승';
+  const extra = [
+    d.traffic ? `검색량 ${d.traffic}` : '',
+    d.newsTitle ? `관련 기사: ${d.newsSource ? d.newsSource + ' · ' : ''}${d.newsTitle}` : '',
+  ].filter(Boolean).join(' / ');
+  return `지금 한국 ${where} ${d.rank}위 → "${d.keyword}"${extra ? '\n(' + extra + ')' : ''}
+${common}
+${d.newsUrl ? '\n기사: ' + d.newsUrl : ''}`;
+}
+
+async function copyText(t) {
+  try { await navigator.clipboard.writeText(t); return true; }
+  catch (e) {
+    const ta = document.createElement('textarea');
+    ta.value = t; ta.style.cssText = 'position:fixed;top:0;left:0;opacity:0';
+    document.body.appendChild(ta); ta.focus(); ta.select();
+    let ok = false; try { ok = document.execCommand('copy'); } catch (_) {}
+    ta.remove(); return ok;
+  }
+}
+let toastTimer;
+function toast(m) {
+  const t = document.getElementById('toast');
+  t.textContent = m; t.classList.add('show');
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove('show'), 2200);
+}
+document.getElementById('grid').addEventListener('click', async e => {
+  const b = e.target.closest('.xbtn');
+  if (!b) return;
+  const ok = await copyText(xPrompt(CARDS[+b.dataset.i]));
+  if (ok) {
+    b.textContent = '복사됨 ✓'; b.classList.add('done');
+    setTimeout(() => { b.textContent = '𝕏 글감 복사'; b.classList.remove('done'); }, 1500);
+    toast('Claude에 붙여넣으세요 ✍️');
+  } else toast('복사가 안 됐어요. 다시 눌러주세요');
+});
+
+function esc(s) {
+  return String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+
+function render() {
+  const data = (window.__TREND_DATA__ || {})[currentDate];
+  document.getElementById('dateLabel').textContent = dayLabel(currentDate);
+  const grid = document.getElementById('grid');
+  if (!data) { grid.innerHTML = ''; return; }
+
+  let items = [];
+  if (filterSrc === 'all' || filterSrc === 'signal') items.push(...(data.signal || []).map(k => ({ t: 'kw', src: 'signal', d: k })));
+  if (filterSrc === 'all' || filterSrc === 'gtrends') items.push(...(data.gtrends || []).map(k => ({ t: 'kw', src: 'gtrends', d: k })));
+  if (filterSrc === 'all' || filterSrc === 'youtube') items.push(...(data.youtube || []).map(v => ({ t: 'yt', src: 'youtube', d: v })));
+
+  const q = query.trim().toLowerCase();
+  if (q) {
+    items = items.filter(({ d }) =>
+      [d.title, d.keyword, d.channel, d.category, d.newsTitle].some(f => f && String(f).toLowerCase().includes(q))
+    );
+  }
+
+  document.getElementById('count').textContent = `${items.length}건`;
+  document.getElementById('empty').style.display = items.length ? 'none' : 'block';
+  CARDS = items;
+  grid.innerHTML = items.map((it, i) => it.t === 'yt' ? cardYouTube(it.d, i) : cardKeyword(it.d, it.src, i)).join('');
+}
+
+document.getElementById('search').addEventListener('input', e => { query = e.target.value; render(); });
+dateSel.addEventListener('change', e => loadDate(e.target.value));
+
+buildChips();
+if (dates.length) { dateSel.value = dates[0]; loadDate(dates[0]); }
+else document.getElementById('count').textContent = '아직 수집된 데이터가 없어요. 첫 자동 수집을 기다려 주세요.';
+</script>
+</body>
+</html>
