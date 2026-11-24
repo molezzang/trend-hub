@@ -102,6 +102,10 @@
     position: absolute; top: 8px; left: 8px; background: rgba(0,0,0,.75);
     color: #fff; font-weight: 800; font-size: 13px; border-radius: 8px; padding: 3px 9px;
   }
+  .durbadge {
+    position: absolute; bottom: 8px; right: 8px; background: rgba(0,0,0,.78);
+    color: #fff; font-weight: 800; font-size: 12px; border-radius: 7px; padding: 3px 8px;
+  }
   .hot {
     position: absolute; top: 8px; right: 8px; background: var(--accent);
     color: #fff; font-weight: 700; font-size: 11.5px; border-radius: 8px; padding: 3px 8px;
@@ -203,7 +207,7 @@
 <!-- ══════ 셋업 (API 키 입력) ══════ -->
 <div id="setup" style="display:none">
   <h2>🫀 튼튼혈관 <span>트렌드 헌터</span></h2>
-  <p class="desc">지금 떡상 중인 건강 콘텐츠를 카테고리별로 조회하고, 바로 X 글감으로 뽑아주는 대시보드입니다. 처음 한 번만 유튜브 API 키를 넣으면 돼요 (무료).</p>
+  <p class="desc">지금 떡상 중인 건강 <b>숏츠(30초 이하)</b>를 카테고리별로 조회하고, 바로 X 글감으로 뽑아주는 대시보드입니다. 처음 한 번만 유튜브 API 키를 넣으면 돼요 (무료).</p>
   <ol>
     <li><a href="https://console.cloud.google.com/" target="_blank">Google Cloud Console</a> 접속 → 새 프로젝트 만들기</li>
     <li>검색창에 <code>YouTube Data API v3</code> 검색 → <b>사용 설정</b></li>
@@ -229,6 +233,10 @@
       <option value="2">최근 2일</option>
       <option value="7" selected>최근 1주</option>
       <option value="30">최근 1개월</option>
+    </select>
+    <select id="durSel" onchange="saveDur(); render()" title="최대 길이">
+      <option value="30" selected>30초↓</option>
+      <option value="60">60초↓</option>
     </select>
     <select id="sortSel" onchange="render()">
       <option value="views">조회수순</option>
@@ -306,6 +314,10 @@ function loadCats() {
 
 /* ══════ 초기화 ══════ */
 function init() {
+  try {
+    const d = localStorage.getItem("tthunter_dur");
+    if (d && [...document.getElementById("durSel").options].some(o => o.value === d)) document.getElementById("durSel").value = d;
+  } catch (e) {}
   if (localStorage.getItem(KEY_STORE)) {
     document.getElementById("app").style.display = "block";
     buildTabs();
@@ -342,7 +354,8 @@ function buildTabs() {
 async function ytSearch(q, days, key) {
   const after = new Date(Date.now() - days * 86400000).toISOString();
   const sr = await fetch("https://www.googleapis.com/youtube/v3/search?" + new URLSearchParams({
-    part: "snippet", type: "video", order: "viewCount", maxResults: "25",
+    part: "snippet", type: "video", order: "viewCount", maxResults: "50",
+    videoDuration: "short",   // 4분 미만만. 아래 render에서 30초/60초로 다시 거름
     q, publishedAfter: after, regionCode: "KR", relevanceLanguage: "ko", key,
   })).then(r => r.json());
   if (sr.error) throw new Error(sr.error.message);
@@ -351,7 +364,7 @@ async function ytSearch(q, days, key) {
   if (!ids.length) return [];
 
   const vr = await fetch("https://www.googleapis.com/youtube/v3/videos?" + new URLSearchParams({
-    part: "statistics,snippet", id: ids.join(","), key,
+    part: "statistics,snippet,contentDetails", id: ids.join(","), key,
   })).then(r => r.json());
   if (vr.error) throw new Error(vr.error.message);
 
@@ -366,15 +379,24 @@ async function ytSearch(q, days, key) {
       views,
       vpd: Math.round(views / ageDays),
       published: v.snippet.publishedAt,
+      sec: isoSec(v.contentDetails && v.contentDetails.duration),
     };
   });
 }
+
+function isoSec(d) {
+  const m = /PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/.exec(d || "");
+  return m ? (+m[1] || 0) * 3600 + (+m[2] || 0) * 60 + (+m[3] || 0) : 0;
+}
+function maxSec() { return +document.getElementById("durSel").value; }
+function isShort(v) { return v.sec > 0 && v.sec <= maxSec(); }
+function saveDur() { try { localStorage.setItem("tthunter_dur", document.getElementById("durSel").value); } catch (e) {} }
 
 /* 카테고리별 로드 (캐시 지원) */
 async function fetchCat(catId, days, force = false) {
   const key = localStorage.getItem(KEY_STORE);
   const cat = CATS.find(c => c.id === catId);
-  const cacheKey = `tthunter_${catId}_${days}_${hash(cat.q)}`;
+  const cacheKey = `tthunter2_${catId}_${days}_${hash(cat.q)}`;
   if (!force) {
     try {
       const c = JSON.parse(localStorage.getItem(cacheKey));
@@ -387,6 +409,7 @@ async function fetchCat(catId, days, force = false) {
 }
 
 /* ══════ 메인 로드 ══════ */
+let loadNote = "";
 async function load(force = false) {
   const days = document.getElementById("rangeSel").value;
   setStatus("불러오는 중...");
@@ -395,13 +418,13 @@ async function load(force = false) {
     if (customQuery) {
       const key = localStorage.getItem(KEY_STORE);
       videos = await ytSearch(customQuery, days, key);
-      setStatus(`실시간 검색어 "${esc(customQuery)}" 관련 영상 ${videos.length}개`);
+      loadNote = `실시간 검색어 "${esc(customQuery)}"`;
     } else {
       const r = await fetchCat(currentCat, days, force);
       videos = r.data;
-      setStatus(r.cachedAt
-        ? `캐시된 결과 (${new Date(r.cachedAt).toLocaleTimeString("ko-KR")} 조회) · ${videos.length}개`
-        : `방금 조회 완료 · ${videos.length}개`);
+      loadNote = r.cachedAt
+        ? `캐시된 결과 (${new Date(r.cachedAt).toLocaleTimeString("ko-KR")} 조회)`
+        : `방금 조회 완료`;
     }
     render();
   } catch (e) {
@@ -412,7 +435,11 @@ async function load(force = false) {
 /* ══════ 렌더링 ══════ */
 function render() {
   const sort = document.getElementById("sortSel").value;
-  const list = [...videos].sort((a, b) =>
+  const shorts = videos.filter(isShort);
+  const msg = `${loadNote} · <b>${maxSec()}초 이하 숏츠 ${shorts.length}개</b> (후보 ${videos.length}개 중)`;
+  setStatus(shorts.length || !videos.length ? msg
+    : msg + `<br>👉 이 조건엔 없어요. 위에서 <b>60초↓</b>나 <b>최근 1개월</b>로 넓혀보세요.`);
+  const list = [...shorts].sort((a, b) =>
     sort === "views" ? b.views - a.views :
     sort === "vpd"   ? b.vpd - a.vpd :
     new Date(b.published) - new Date(a.published)
@@ -421,13 +448,14 @@ function render() {
 
   document.getElementById("grid").innerHTML = list.map((v, i) => `
     <div class="card">
-      <div class="thumbwrap" onclick="window.open('https://youtu.be/${v.id}','_blank')">
+      <div class="thumbwrap" onclick="window.open('https://youtube.com/shorts/${v.id}','_blank')">
         <img src="${v.thumb}" loading="lazy" alt="">
         <span class="rankbadge">${i + 1}</span>
+        <span class="durbadge">${v.sec}초</span>
         ${v.vpd > maxVpd * 0.5 ? '<span class="hot">🔥 떡상중</span>' : ""}
       </div>
       <div class="body">
-        <div class="title" onclick="window.open('https://youtu.be/${v.id}','_blank')">${esc(v.title)}</div>
+        <div class="title" onclick="window.open('https://youtube.com/shorts/${v.id}','_blank')">${esc(v.title)}</div>
         <div class="meta"><span>${esc(v.channel)}</span><b>${fmt(v.views)}회</b></div>
         <div class="meta">
           <span>${new Date(v.published).toLocaleDateString("ko-KR")}</span>
@@ -435,7 +463,7 @@ function render() {
         </div>
         <div class="actions">
           <button class="copybtn" onclick="copyPrompt('${v.id}', this)">𝕏 글감 복사</button>
-          <a class="gobtn" href="https://youtu.be/${v.id}" target="_blank" rel="noopener">▶ 영상</a>
+          <a class="gobtn" href="https://youtube.com/shorts/${v.id}" target="_blank" rel="noopener">▶ 숏츠</a>
         </div>
       </div>
     </div>`).join("");
@@ -450,8 +478,9 @@ async function pickTop3() {
     const all = [];
     for (const cat of CATS) {
       const r = await fetchCat(cat.id, days);
-      r.data.forEach(v => all.push({ ...v, cat: cat.name }));
+      r.data.filter(isShort).forEach(v => all.push({ ...v, cat: cat.name }));
     }
+    if (!all.length) throw new Error(`${maxSec()}초 이하 숏츠가 없어요. 60초↓나 최근 1개월로 넓혀보세요`);
     // 중복 영상 제거
     const seen = new Set();
     const uniq = all.filter(v => !seen.has(v.id) && seen.add(v.id));
@@ -480,11 +509,11 @@ async function pickTop3() {
     const medals = ["🥇", "🥈", "🥉"];
     document.getElementById("top3grid").innerHTML = top3Videos.map((v, i) => `
       <div class="topcard">
-        <img src="${v.thumb}" onclick="window.open('https://youtu.be/${v.id}','_blank')" alt="">
+        <img src="${v.thumb}" onclick="window.open('https://youtube.com/shorts/${v.id}','_blank')" alt="">
         <div class="tbody">
           <span class="medal">${medals[i]} ${esc(v.cat)}</span>
-          <div class="ttitle" onclick="window.open('https://youtu.be/${v.id}','_blank')">${esc(v.title)}</div>
-          <div class="why">하루 <b>+${fmt(v.vpd)}회</b> 떡상 중${v.relWords.length ? ` · 연관: ${v.relWords.slice(0, 3).join(", ")}` : ""}</div>
+          <div class="ttitle" onclick="window.open('https://youtube.com/shorts/${v.id}','_blank')">${esc(v.title)}</div>
+          <div class="why">${v.sec}초 · 하루 <b>+${fmt(v.vpd)}회</b> 떡상 중${v.relWords.length ? ` · 연관: ${v.relWords.slice(0, 3).join(", ")}` : ""}</div>
           <button onclick="copyTopPrompt(${i}, this)">𝕏 글감 복사</button>
         </div>
       </div>`).join("");
@@ -525,14 +554,14 @@ async function loadTrends() {
 
 /* ══════ 𝕏 글감 프롬프트 ══════ */
 function buildPrompt(v, extra = "") {
-  return `지금 유튜브에서 "${v.title}" (${v.channel}, 조회수 ${fmt(v.views)}회, 하루 +${fmt(v.vpd)}회) 영상이 떡상 중이야. ${extra}
+  return `지금 유튜브에서 "${v.title}" (${v.channel}, ${v.sec}초 숏츠, 조회수 ${fmt(v.views)}회, 하루 +${fmt(v.vpd)}회) 영상이 떡상 중이야. 이 숏츠를 X에 영상으로 같이 올릴 거야. ${extra}
 이 주제를 튼튼혈관연구소 X(트위터) 글로 써줘.
 - 17년차 심혈관조영실 방사선사가 현장에서 본 것 한 줄을 꼭 넣어서
 - 첫 줄에 결론부터, 짧게 끊어 쓰는 X 말투로
 - 유튜브 영상과 겹치지 않는 독자적 관점 한 가지를 반드시 추가해줘
 - 후보 3개
 
-원본: https://youtu.be/${v.id}`;
+원본: https://youtube.com/shorts/${v.id}`;
 }
 function copyPrompt(id, btn) {
   const v = videos.find(x => x.id === id);
