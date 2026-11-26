@@ -176,6 +176,7 @@
     <div class="filters">
       <select id="regionSel" title="지역">
         <option value="kr">🇰🇷 국내</option>
+        <option value="jp">🇯🇵 일본</option>
         <option value="world">🌍 해외</option>
       </select>
       <select id="rangeSel" title="기간">
@@ -233,28 +234,50 @@
 /* ══════ 카테고리 (⚙️에서 검색어 편집 가능) ══════
    ytCat: 유튜브 카테고리 번호 (17 스포츠, 15 동물). 있으면 그 분류 안에서만 찾아서 정확도가 올라감 */
 const DEFAULT_CATS = [
+  { id: "food",    name: "🍜 맛집",
+    kr: "일본 맛집 | 도쿄 맛집 | 오사카 맛집 | 후쿠오카 맛집 | 맛집 | 먹방",
+    jp: "グルメ | ラーメン | 寿司 | 食べ歩き | 大食い | 屋台",
+    world: "japan food | tokyo food | street food | ramen | sushi | food tour",
+    tip: `맛집 영상이야. 가게 이름·지역(역 이름)·대표 메뉴·가격을 제목/설명에서 찾아서 본문 아래 "📍" 한 줄로 정리해줘 (모르면 [확인], 📍는 이모지 개수에서 빼).
+- 후킹은 비주얼·가격·줄 서는 시간 같은 숫자로. 예: "이게 800엔이라고?"
+- 댓글은 "가봤다 / 가고 싶다 / 여기보다 나은 데 안다" 쪽으로 유도` },
+  { id: "stay",    name: "🏨 숙소",
+    kr: "숙소 추천 | 일본 숙소 | 료칸 | 호텔 | 오션뷰 숙소 | 풀빌라",
+    jp: "ホテル | 旅館 | 温泉宿 | ルームツアー | 絶景 宿",
+    world: "hotel room tour | ryokan | luxury hotel | unique stay | capsule hotel",
+    tip: `숙소 영상이야. 숙소 이름·지역·1박 가격대를 찾아서 본문 아래 "📍" 한 줄로 정리해줘 (모르면 [확인], 📍는 이모지 개수에서 빼).
+- 후킹은 가격 반전이나 비교로. 예: "1박 10만원에 이 뷰가 나온다고?"
+- 댓글은 "누구랑 갈지 / 가봤다 / 가격 실화냐" 쪽으로 유도` },
   { id: "sports",  name: "⚽ 스포츠",       ytCat: "17",
     kr: "축구 | 야구 | 농구 | 격투기 | 골 장면 | 명장면",
+    jp: "サッカー | 野球 | 大谷 | 格闘技 | スーパープレー",
     world: "football | soccer goal | nba | ufc | sports moment | insane skills" },
   { id: "animal",  name: "🐶 동물",         ytCat: "15",
     kr: "강아지 | 고양이 | 동물 | 댕댕이 | 냥이",
+    jp: "犬 | 猫 | 動物 | 柴犬 | 子猫",
     world: "dog | cat | funny animals | wildlife | animal rescue" },
   { id: "crash",   name: "🚗 사고·블랙박스",
     kr: "블랙박스 | 교통사고 | 사고 순간 | 아찔한 순간 | 한문철",
+    jp: "ドラレコ | 交通事故 | ヒヤリハット | 危険運転",
     world: "dashcam | car crash | close call | instant karma | road rage" },
   { id: "issue",   name: "📢 이슈·논란",
     kr: "논란 | 실시간 이슈 | 충격 | 현장 영상 | 뉴스",
+    jp: "炎上 | 衝撃映像 | 話題 | ニュース",
     world: "breaking news | controversy | caught on camera | viral video" },
   { id: "wow",     name: "😱 소름·레전드",
     kr: "레전드 | 소름 | 신기한 | 반전 | 미친 실력",
+    jp: "神業 | 衝撃 | すごい | 鳥肌",
     world: "unbelievable | mind blowing | satisfying | amazing talent | wait for it" },
   { id: "funny",   name: "🤣 웃긴 순간",
     kr: "웃긴 영상 | 빵터짐 | 몰카 | 개웃김 | 웃참",
+    jp: "面白い | ドッキリ | 爆笑 | ハプニング",
     world: "funny | fail | prank | try not to laugh" },
   { id: "heart",   name: "🥹 감동·참교육",
     kr: "감동 | 참교육 | 선행 | 눈물 | 사이다",
+    jp: "感動 | 泣ける | 優しい | スカッと",
     world: "wholesome | faith in humanity | heartwarming | justice served" },
 ];
+const REGIONS = { kr: "국내", jp: "일본", world: "해외" };
 const ALL_ID = "all";
 
 /* 선정적·혐오 영상 거르기 (제목·태그·설명에 있으면 제외). safeSearch=strict + 연령제한 영상 제외와 같이 씀 */
@@ -280,6 +303,7 @@ function loadCats() {
   return DEFAULT_CATS.map(c => ({
     ...c,
     kr: saved["kr_" + c.id] || c.kr,
+    jp: saved["jp_" + c.id] || c.jp,
     world: saved["world_" + c.id] || c.world,
   }));
 }
@@ -344,6 +368,7 @@ async function ytSearch(cat, rg, days, key) {
     q: cat[rg], publishedAfter: after, key,
   };
   if (rg === "kr") { p.regionCode = "KR"; p.relevanceLanguage = "ko"; }
+  if (rg === "jp") { p.regionCode = "JP"; p.relevanceLanguage = "ja"; }
   if (cat.ytCat) p.videoCategoryId = cat.ytCat;
   const sr = await fetch("https://www.googleapis.com/youtube/v3/search?" + new URLSearchParams(p)).then(r => r.json());
   if (sr.error) throw new Error(sr.error.message);
@@ -374,6 +399,7 @@ async function ytSearch(cat, rg, days, key) {
       sec: isoSec(v.contentDetails.duration),
       ageLimit: v.contentDetails.contentRating && v.contentDetails.contentRating.ytRating === "ytAgeRestricted",
       cat: cat.name,
+      catId: cat.id,
     };
   });
 }
@@ -392,7 +418,9 @@ async function fetchCat(cat, rg, days, force) {
   return { data, at: Date.now() };
 }
 
+let loadSeq = 0;   // 탭을 빨리 바꿨을 때 늦게 끝난 이전 조회가 화면을 덮어쓰지 않게
 async function load(force = false) {
+  const my = ++loadSeq;
   const rg = region(), days = document.getElementById("rangeSel").value;
   const targets = currentCat === ALL_ID ? CATS : CATS.filter(c => c.id === currentCat);
   document.getElementById("grid").innerHTML = "";
@@ -402,6 +430,7 @@ async function load(force = false) {
     let oldest = Date.now();
     for (const cat of targets) {
       const r = await fetchCat(cat, rg, days, force);
+      if (my !== loadSeq) return;
       oldest = Math.min(oldest, r.at);
       all.push(...r.data);
     }
@@ -410,6 +439,7 @@ async function load(force = false) {
     raw._at = oldest;
     render();
   } catch (e) {
+    if (my !== loadSeq) return;
     const quota = /quota/i.test(e.message);
     setStatus(`<span class="err">⚠️ ${quota
       ? "오늘 유튜브 무료 할당량을 다 썼어요. 내일 오후 4~5시(한국)에 초기화됩니다. 그 전엔 이미 본 결과만 나와요."
@@ -481,6 +511,9 @@ document.addEventListener("click", e => {
 /* ══════ 𝕏 글감 프롬프트 ══════ */
 function buildPrompt(v) {
   const examples = (lsGet(EX_STORE) || "").trim();
+  const cat = CATS.find(c => c.id === v.catId || c.name === v.cat);
+  const tip = cat && cat.tip ? `\n\n[이 카테고리 팁]\n${cat.tip}` : "";
+  const foreign = /[\u3040-\u30ff]/.test(v.title) ? "\n※ 일본어 영상이야. 제목·설명을 먼저 한국어로 풀어서 이해한 다음 한국어로 써줘." : "";
   const engage = v.views ? ` · 좋아요 ${fmt(v.likes)} · 댓글 ${fmt(v.comments)}` : "";
   return `이 유튜브 숏츠를 X(트위터)에 영상으로 올릴 거야. 타임라인에서 스크롤을 멈추고, 댓글을 달 수밖에 없는 글을 써줘.
 
@@ -490,7 +523,7 @@ function buildPrompt(v) {
 조회수 ${fmt(v.views)}회 (하루 +${fmt(v.vpd)})${engage}
 설명: ${v.desc.replace(/\s+/g, " ").trim() || "(없음)"}
 링크: https://youtube.com/shorts/${v.id}
-※ 영상 내용은 제목·설명으로 추정해서 쓰고, 추정한 부분은 [확인]이라고 표시해줘. 내가 보고 고칠게.
+※ 영상 내용은 제목·설명으로 추정해서 쓰고, 추정한 부분은 [확인]이라고 표시해줘. 내가 보고 고칠게.${foreign}
 
 [형식] 3세트. 세트마다 각도를 다르게 — ①반전형 ②논쟁형 ③공감형
 - 후킹 1줄: 15자 안팎. 결과를 먼저 던지거나, 숫자·반전·"이게 된다고?" 같은 의문으로. 영상 첫 장면보다 세게
@@ -501,7 +534,7 @@ function buildPrompt(v) {
 - 짧게 끊어 쓰는 X 말투. 해시태그 금지, 이모지는 최대 1개
 - 사고·논란 영상: 피해자 조롱·신상·혐오 표현 금지. 사실 단정 말고 "~라는데" 식으로
 - 맨 끝에 "출처: ${v.channel} (YouTube)" 한 줄
-- 마지막에 3세트 중 뭐가 제일 터질지 한 줄로 골라줘${examples ? `
+- 마지막에 3세트 중 뭐가 제일 터질지 한 줄로 골라줘${tip}${examples ? `
 
 [내 X에서 실제로 터진 글 — 이 후킹·말투·길이를 그대로 따라 써]
 ${examples}` : ""}`;
@@ -527,7 +560,7 @@ async function copyText(t, btn) {
 /* ══════ ⚙️ 설정 ══════ */
 function openEdit() {
   const rg = region();
-  document.getElementById("editRegion").textContent = rg === "kr" ? "국내" : "해외";
+  document.getElementById("editRegion").textContent = REGIONS[rg];
   document.getElementById("examplesInput").value = lsGet(EX_STORE) || "";
   document.getElementById("editRows").innerHTML = CATS.map(c => `
     <div class="editrow">
